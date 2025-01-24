@@ -4,12 +4,17 @@ import json
 import base64
 import io
 
+# Measuring interruption delta
+from datetime import datetime
+
 from typing import Optional, Callable, List, Dict, Any
 from enum import Enum
 from pydub import AudioSegment
 
 from llama_index.core.tools import BaseTool, AsyncBaseTool, ToolSelection, adapt_to_async_tool, call_tool_with_selection
 
+def ms_timestamp():
+    return datetime.now().timestamp() * 1000
 
 class TurnDetectionMode(Enum):
     SERVER_VAD = "server_vad"
@@ -98,6 +103,9 @@ class RealtimeClient:
         # Track printing state for input and output transcripts
         self._print_input_transcript = False
         self._output_transcript_buffer = ""
+
+        # Measuring interruption delta
+        self.audio_timestamp = ms_timestamp() 
         
         
 
@@ -252,8 +260,11 @@ class RealtimeClient:
     async def truncate_response(self):
         """Truncate the conversation item to match what was actually played."""
         if self._current_item_id:
+            delta = self.audio_timestamp - ms_timestamp()
             event = {
                 "type": "conversation.item.truncate",
+                "content_index": 0,
+                "audio_end_ms": int(delta),
                 "item_id": self._current_item_id
             }
             await self.ws.send(json.dumps(event))
@@ -281,7 +292,7 @@ class RealtimeClient:
             return
             
         print("\n[Handling interruption]")
-        
+
         # 1. Cancel the current response
         if self._current_response_id:
             await self.cancel_response()
@@ -319,7 +330,8 @@ class RealtimeClient:
                 
                 # Handle interruptions
                 elif event_type == "input_audio_buffer.speech_started":
-                    print("\n[Speech detected")
+                    print("\n[Speech detected]")
+                    self.audio_timestamp = ms_timestamp()
                     if self._is_responding:
                         await self.handle_interruption()
 
@@ -379,3 +391,4 @@ class RealtimeClient:
         """Close the WebSocket connection."""
         if self.ws:
             await self.ws.close()
+
