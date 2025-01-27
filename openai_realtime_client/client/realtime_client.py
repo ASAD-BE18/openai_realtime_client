@@ -260,7 +260,7 @@ class RealtimeClient:
     async def truncate_response(self):
         """Truncate the conversation item to match what was actually played."""
         if self._current_item_id:
-            delta = self.audio_timestamp - ms_timestamp()
+            delta = max(0, ms_timestamp() - self.audio_timestamp)
             event = {
                 "type": "conversation.item.truncate",
                 "content_index": 0,
