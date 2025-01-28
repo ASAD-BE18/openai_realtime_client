@@ -319,6 +319,7 @@ class RealtimeClient:
                 elif event_type == "response.created":
                     self._current_response_id = event.get("response", {}).get("id")
                     self._is_responding = True
+                    self.audio_timestamp = ms_timestamp()
                 
                 elif event_type == "response.output_item.added":
                     self._current_item_id = event.get("item", {}).get("id")
@@ -349,7 +350,6 @@ class RealtimeClient:
                         
                 elif event_type == "response.audio.delta":
                     if self.on_audio_delta:
-                        self.audio_timestamp = ms_timestamp()
                         audio_bytes = base64.b64decode(event["delta"])
                         self.on_audio_delta(audio_bytes)
                         
