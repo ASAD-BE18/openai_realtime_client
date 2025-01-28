@@ -331,7 +331,7 @@ class RealtimeClient:
                 # Handle interruptions
                 elif event_type == "input_audio_buffer.speech_started":
                     print("\n[Speech detected]")
-                    self.audio_timestamp = ms_timestamp()
+                    # self.audio_timestamp = ms_timestamp()
                     if self._is_responding:
                         await self.handle_interruption()
 
@@ -349,6 +349,7 @@ class RealtimeClient:
                         
                 elif event_type == "response.audio.delta":
                     if self.on_audio_delta:
+                        self.audio_timestamp = ms_timestamp()
                         audio_bytes = base64.b64decode(event["delta"])
                         self.on_audio_delta(audio_bytes)
                         
