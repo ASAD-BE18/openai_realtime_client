@@ -74,7 +74,10 @@ class RealtimeClient:
         on_interrupt: Optional[Callable[[], None]] = None,
         on_input_transcript: Optional[Callable[[str], None]] = None,  
         on_output_transcript: Optional[Callable[[str], None]] = None,  
-        extra_event_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], None]]] = None
+        extra_event_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], None]]] = None,
+        vad_silence_duration_ms: int = 500, # OpenAI default value
+        vad_prefix_padding_ms: int = 300 # OpenAI default value
+
     ):
         self.api_key = api_key
         self.model = model
@@ -106,7 +109,9 @@ class RealtimeClient:
 
         # Measuring interruption delta
         self.audio_timestamp = ms_timestamp() 
-        
+
+        self.vad_silence_duration_ms = vad_silence_duration_ms
+        self.vad_prefix_padding_ms = vad_prefix_padding_ms
         
 
         
@@ -154,8 +159,8 @@ class RealtimeClient:
                 "turn_detection": {
                     "type": "server_vad",
                     "threshold": 0.5,
-                    "prefix_padding_ms": 500,
-                    "silence_duration_ms": 200
+                    "prefix_padding_ms": self.vad_prefix_padding_ms,
+                    "silence_duration_ms": self.vad_silence_duration_ms
                 },
                 "tools": tools,
                 "tool_choice": "auto",
