@@ -188,6 +188,23 @@ class RealtimeClient:
         await self.ws.send(json.dumps(event))
         await self.create_response()
 
+    
+    async def send_system_text(self, text: str) -> None:
+        """Send text message to the API."""
+        event = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [{
+                    "type": "input_text",
+                    "text": text
+                }]
+            }
+        }
+        await self.ws.send(json.dumps(event))
+        await self.create_response()
+
     async def send_audio(self, audio_bytes: bytes) -> None:
         """Send audio data to the API."""
         # Convert audio to required format (24kHz, mono, PCM16)
