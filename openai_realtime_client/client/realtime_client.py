@@ -4,12 +4,17 @@ import json
 import base64
 import io
 
+# Measuring interruption delta
+from datetime import datetime
+
 from typing import Optional, Callable, List, Dict, Any
 from enum import Enum
 from pydub import AudioSegment
 
 from llama_index.core.tools import BaseTool, AsyncBaseTool, ToolSelection, adapt_to_async_tool, call_tool_with_selection
 
+def ms_timestamp():
+    return datetime.now().timestamp() * 1000
 
 class TurnDetectionMode(Enum):
     SERVER_VAD = "server_vad"
@@ -69,7 +74,10 @@ class RealtimeClient:
         on_interrupt: Optional[Callable[[], None]] = None,
         on_input_transcript: Optional[Callable[[str], None]] = None,  
         on_output_transcript: Optional[Callable[[str], None]] = None,  
-        extra_event_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], None]]] = None
+        extra_event_handlers: Optional[Dict[str, Callable[[Dict[str, Any]], None]]] = None,
+        vad_silence_duration_ms: int = 500, # OpenAI default value
+        vad_prefix_padding_ms: int = 300 # OpenAI default value
+
     ):
         self.api_key = api_key
         self.model = model
@@ -98,7 +106,12 @@ class RealtimeClient:
         # Track printing state for input and output transcripts
         self._print_input_transcript = False
         self._output_transcript_buffer = ""
-        
+
+        # Measuring interruption delta
+        self.audio_timestamp = ms_timestamp() 
+
+        self.vad_silence_duration_ms = vad_silence_duration_ms
+        self.vad_prefix_padding_ms = vad_prefix_padding_ms
         
 
         
@@ -146,8 +159,8 @@ class RealtimeClient:
                 "turn_detection": {
                     "type": "server_vad",
                     "threshold": 0.5,
-                    "prefix_padding_ms": 500,
-                    "silence_duration_ms": 200
+                    "prefix_padding_ms": self.vad_prefix_padding_ms,
+                    "silence_duration_ms": self.vad_silence_duration_ms
                 },
                 "tools": tools,
                 "tool_choice": "auto",
@@ -171,6 +184,23 @@ class RealtimeClient:
             "item": {
                 "type": "message",
                 "role": "user",
+                "content": [{
+                    "type": "input_text",
+                    "text": text
+                }]
+            }
+        }
+        await self.ws.send(json.dumps(event))
+        await self.create_response()
+
+    
+    async def send_system_text(self, text: str) -> None:
+        """Send text message to the API."""
+        event = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
                 "content": [{
                     "type": "input_text",
                     "text": text
@@ -252,8 +282,11 @@ class RealtimeClient:
     async def truncate_response(self):
         """Truncate the conversation item to match what was actually played."""
         if self._current_item_id:
+            delta = max(0, ms_timestamp() - self.audio_timestamp)
             event = {
                 "type": "conversation.item.truncate",
+                "content_index": 0,
+                "audio_end_ms": int(delta),
                 "item_id": self._current_item_id
             }
             await self.ws.send(json.dumps(event))
@@ -281,7 +314,7 @@ class RealtimeClient:
             return
             
         print("\n[Handling interruption]")
-        
+
         # 1. Cancel the current response
         if self._current_response_id:
             await self.cancel_response()
@@ -308,6 +341,7 @@ class RealtimeClient:
                 elif event_type == "response.created":
                     self._current_response_id = event.get("response", {}).get("id")
                     self._is_responding = True
+                    self.audio_timestamp = ms_timestamp()
                 
                 elif event_type == "response.output_item.added":
                     self._current_item_id = event.get("item", {}).get("id")
@@ -319,7 +353,8 @@ class RealtimeClient:
                 
                 # Handle interruptions
                 elif event_type == "input_audio_buffer.speech_started":
-                    print("\n[Speech detected")
+                    print("\n[Speech detected]")
+                    # self.audio_timestamp = ms_timestamp()
                     if self._is_responding:
                         await self.handle_interruption()
 
@@ -379,3 +414,4 @@ class RealtimeClient:
         """Close the WebSocket connection."""
         if self.ws:
             await self.ws.close()
+

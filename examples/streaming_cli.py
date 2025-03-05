@@ -20,8 +20,8 @@ tools = [FunctionTool.from_defaults(fn=get_phone_number)]
 
 async def main():
     audio_handler = AudioHandler()
-    input_handler = InputHandler()
-    input_handler.loop = asyncio.get_running_loop()
+    # input_handler = InputHandler()
+    # input_handler.loop = asyncio.get_running_loop()
     
     client = RealtimeClient(
         api_key=os.environ.get("OPENAI_API_KEY"),
@@ -33,8 +33,8 @@ async def main():
     )
 
     # Start keyboard listener in a separate thread
-    listener = keyboard.Listener(on_press=input_handler.on_press)
-    listener.start()
+    # listener = keyboard.Listener(on_press=input_handler.on_press)
+    # listener.start()
     
     try:
         await client.connect()
@@ -49,11 +49,11 @@ async def main():
         streaming_task = asyncio.create_task(audio_handler.start_streaming(client))
         
         # Simple input loop for quit command
-        while True:
-            command, _ = await input_handler.command_queue.get()
-            
-            if command == 'q':
-                break
+        # while True:
+        #     command, _ = await input_handler.command_queue.get()
+        #     
+        #     if command == 'q':
+        #         break
             
     except Exception as e:
         print(f"Error: {e}")
